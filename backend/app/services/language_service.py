@@ -2,102 +2,92 @@
 Language detection service using FastText
 """
 
-import os
 import logging
+import os
 from typing import Dict, Optional
-from pathlib import Path
+
+from app.core.config import get_settings
 
 # Try to import fasttext, but make it optional
 try:
     import fasttext
+
     FASTTEXT_AVAILABLE = True
-except ImportError:
+except ImportError:  # pragma: no cover - optional dependency
     FASTTEXT_AVAILABLE = False
     fasttext = None
-    logging.warning("FastText not available. Language detection will use fallback method.")
+    logging.warning(
+        "FastText not available. Language detection will use fallback method."
+    )
 
 logger = logging.getLogger(__name__)
+settings = get_settings()
 
 
 class LanguageService:
-    """
-    Service for detecting language in text using FastText
-    """
-    
+    """Service for detecting language in text using FastText."""
+
     def __init__(self, model_path: Optional[str] = None):
-        """
-        Initialize the language detection service.
-        
-        Args:
-            model_path (str, optional): Path to FastText model file
-        """
         self.model = None
-        self.model_path = model_path
+        self.model_path = model_path or settings.language_model_path
         self.model_name = "lid.176.bin"
         self._load_model()
-    
+
     def _load_model(self):
-        """
-        Load FastText language detection model.
-        Downloads model if not found locally.
-        """
+        """Load FastText language detection model (download if required)."""
+
         if not FASTTEXT_AVAILABLE:
             logger.info("FastText not available. Using fallback language detection.")
             self.model = None
             return
-        
+
         try:
-            # Try to find model in common locations
             possible_paths = [
                 self.model_path,
                 f"models/{self.model_name}",
                 f"data/{self.model_name}",
                 os.path.expanduser(f"~/.fasttext/{self.model_name}"),
             ]
-            
-            model_file = None
-            for path in possible_paths:
-                if path and os.path.exists(path):
-                    model_file = path
-                    break
-            
-            # If model not found, try to download it
+
+            model_file = next(
+                (path for path in possible_paths if path and os.path.exists(path)),
+                None,
+            )
+
             if not model_file:
-                logger.info(f"FastText model not found. Attempting to download {self.model_name}...")
+                logger.info(
+                    "FastText model not found. Attempting to download %s...",
+                    self.model_name,
+                )
                 try:
                     import urllib.request
-                    
-                    # Create models directory
+
                     os.makedirs("models", exist_ok=True)
                     model_file = f"models/{self.model_name}"
-                    
-                    # Download model (FastText lid.176.bin is ~126MB)
-                    url = f"https://dl.fbaipublicfiles.com/fasttext/supervised-models/{self.model_name}"
-                    logger.info(f"Downloading from {url}...")
-                    
+
+                    url = (
+                        "https://dl.fbaipublicfiles.com/fasttext/supervised-models/"
+                        f"{self.model_name}"
+                    )
+                    logger.info("Downloading FastText model from %s", url)
                     urllib.request.urlretrieve(url, model_file)
-                    logger.info(f"Downloaded model to {model_file}")
-                    
-                except Exception as download_error:
-                    logger.warning(f"Could not download model: {str(download_error)}")
+                    logger.info("Downloaded FastText model to %s", model_file)
+
+                except Exception as download_error:  # pragma: no cover - remote IO
+                    logger.warning("Could not download FastText model: %s", download_error)
                     logger.info("Using fallback language detection (keyword-based)")
                     self.model = None
                     return
-            
-            # Load model
-            if FASTTEXT_AVAILABLE:
-                logger.info(f"Loading FastText model from {model_file}")
-                self.model = fasttext.load_model(model_file)
-                logger.info("FastText model loaded successfully")
-            else:
-                logger.info("FastText not available. Using fallback language detection.")
-                self.model = None
-            
-        except Exception as e:
-            logger.error(f"Error loading FastText model: {str(e)}")
+
+            logger.info("Loading FastText model from %s", model_file)
+            self.model = fasttext.load_model(model_file)
+            logger.info("FastText model loaded successfully")
+
+        except Exception as exc:  # pragma: no cover - runtime protection
+            logger.exception("Error loading FastText model: %s", exc)
             logger.info("Using fallback language detection")
             self.model = None
-    
+
     def detect_language(self, text: str) -> Dict:
         """
         Detect the language of given text.

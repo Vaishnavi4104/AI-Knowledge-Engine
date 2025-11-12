@@ -3,60 +3,57 @@ Topic detection service using BERTopic for content gap analysis
 """
 
 import logging
-from typing import List, Dict, Optional
+from typing import Dict, List, Optional
+
+import numpy as np
 import pandas as pd
 from bertopic import BERTopic
 from bertopic.representation import KeyBERTInspired
-import numpy as np
 
+from app.core.config import get_settings
 from app.services.embedding_service import embedding_service
 
 logger = logging.getLogger(__name__)
+settings = get_settings()
 
 
 class TopicService:
-    """
-    Service for topic detection and clustering using BERTopic
-    """
-    
+    """Service for topic detection and clustering using BERTopic."""
+
     def __init__(self):
-        """
-        Initialize the topic detection service.
-        """
         self.model: Optional[BERTopic] = None
         self.documents: List[str] = []
         self.topics_data: Optional[pd.DataFrame] = None
         self._initialize_model()
-    
+
     def _initialize_model(self):
-        """
-        Initialize BERTopic model with custom configuration.
-        """
+        """Initialize BERTopic model with custom configuration."""
+
         try:
             logger.info("Initializing BERTopic model...")
-            
-            # Use KeyBERT-inspired representation for better topic names
+
             representation_model = KeyBERTInspired()
-            
-            # Initialize BERTopic with custom settings
-            # Use the same model name as embedding service
-            embedding_model_name = embedding_service.model_name if embedding_service.model else "all-MiniLM-L6-v2"
-            
+            embedding_model_name = (
+                embedding_service.model_name
+                if embedding_service.model
+                else settings.embedding_model_name
+            )
+
             self.model = BERTopic(
                 embedding_model=embedding_model_name,
                 representation_model=representation_model,
-                verbose=True,
+                verbose=settings.debug,
                 calculate_probabilities=True,
-                min_topic_size=2,  # Minimum documents per topic
-                nr_topics="auto",  # Automatically determine number of topics
+                min_topic_size=2,
+                nr_topics="auto",
             )
-            
+
             logger.info("BERTopic model initialized successfully")
-            
-        except Exception as e:
-            logger.error(f"Error initializing BERTopic: {str(e)}")
+
+        except Exception as exc:  # pragma: no cover - runtime protection
+            logger.exception("Error initializing BERTopic: %s", exc)
             self.model = None
-    
+
     def fit_topics(self, documents: List[str]) -> Dict:
         """
         Fit topics on a collection of documents.
