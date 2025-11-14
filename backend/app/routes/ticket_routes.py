@@ -17,6 +17,7 @@ from app.services.language_service import language_service
 from app.services.recommendation_service import recommendation_service
 from app.services.topic_service import topic_service
 from app.utils.text_cleaner import TextCleaner
+from app.slack_notifier import notify_ticket_created
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
@@ -278,7 +279,8 @@ async def analyze_ticket(
                     embedding_model=embedding_service.model_name,
                     embedding_values=embedding_preview,
                     detected_keywords=priority_analysis["detected_keywords"],
-                    suggested_articles=suggested_articles
+                    suggested_articles=suggested_articles,
+                    language_code=language_detection.get("language_code", "en")
                 )
                 
                 db.add(analysis_record)
@@ -286,11 +288,35 @@ async def analyze_ticket(
                 
                 logger.info(f"Saved analysis record with ID: {analysis_record.id}")
                 
+                # Send Slack notification for new ticket
+                try:
+                    notify_ticket_created(
+                        ticket_text=cleaned_text,
+                        priority=priority_analysis["priority"],
+                        category=category_analysis["category"],
+                        file_name=request.file_name,
+                        ticket_id=str(analysis_record.id)
+                    )
+                except Exception as slack_error:
+                    # Don't fail the request if Slack notification fails
+                    logger.warning(f"Failed to send Slack notification: {str(slack_error)}")
+                
             except Exception as db_error:
                 logger.error(f"Failed to save analysis to database: {str(db_error)}")
                 # Don't fail the request if database save fails
         else:
             logger.debug("Database not available - skipping save operation")
+            
+            # Still send Slack notification even if database is unavailable
+            try:
+                notify_ticket_created(
+                    ticket_text=cleaned_text,
+                    priority=priority_analysis["priority"],
+                    category=category_analysis["category"],
+                    file_name=request.file_name
+                )
+            except Exception as slack_error:
+                logger.warning(f"Failed to send Slack notification: {str(slack_error)}")
         
         logger.info(f"Ticket analysis completed in {total_processing_time:.2f}ms")
         
@@ -447,6 +473,21 @@ async def get_topics():
         
         # Detect content gaps
         content_gaps = topic_service.detect_content_gaps(threshold=0.1)
+        
+        # Send Slack notifications for detected content gaps
+        if content_gaps:
+            try:
+                from app.slack_notifier import notify_content_gap_detected
+                
+                # Notify for top 3 most critical gaps
+                for gap in content_gaps[:3]:
+                    notify_content_gap_detected(
+                        gap=gap,
+                        total_gaps=len(content_gaps)
+                    )
+            except Exception as slack_error:
+                # Don't fail the request if Slack notification fails
+                logger.warning(f"Failed to send Slack notification for content gaps: {str(slack_error)}")
         
         return TopicsResponse(
             topics=topics,

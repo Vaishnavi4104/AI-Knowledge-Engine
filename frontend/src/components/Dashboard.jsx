@@ -1,38 +1,82 @@
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
-import { TrendingUp, Users, MessageSquare, Clock } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
+import { TrendingUp, Users, MessageSquare, Clock, Loader2 } from 'lucide-react';
+import api from '../api/axiosConfig';
 
 const Dashboard = () => {
-  // Mock data for charts
-  const ticketData = [
-    { name: 'Jan', tickets: 45, resolved: 42 },
-    { name: 'Feb', tickets: 52, resolved: 48 },
-    { name: 'Mar', tickets: 38, resolved: 35 },
-    { name: 'Apr', tickets: 61, resolved: 58 },
-    { name: 'May', tickets: 47, resolved: 44 },
-    { name: 'Jun', tickets: 55, resolved: 52 },
-  ];
+  const [analyticsData, setAnalyticsData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  const categoryData = [
-    { name: 'Technical Issues', value: 35, color: '#3b82f6' },
-    { name: 'Account Problems', value: 25, color: '#10b981' },
-    { name: 'Billing Questions', value: 20, color: '#f59e0b' },
-    { name: 'Feature Requests', value: 15, color: '#ef4444' },
-    { name: 'Other', value: 5, color: '#8b5cf6' },
-  ];
+  useEffect(() => {
+    fetchAnalytics();
+  }, []);
 
-  const responseTimeData = [
-    { name: 'Week 1', avgTime: 2.5 },
-    { name: 'Week 2', avgTime: 2.2 },
-    { name: 'Week 3', avgTime: 1.8 },
-    { name: 'Week 4', avgTime: 1.5 },
-  ];
+  const fetchAnalytics = async () => {
+    try {
+      setLoading(true);
+      const response = await api.get('/api/analytics/summary');
+      setAnalyticsData(response.data);
+      setError(null);
+    } catch (err) {
+      console.error('Error fetching analytics:', err);
+      setError('Failed to load analytics data');
+      // Use mock data as fallback
+      setAnalyticsData({
+        ticket_count_by_priority: { High: 15, Medium: 42, Low: 28 },
+        top_articles_usage: [
+          { article: "How to reset password", usage_count: 45 },
+          { article: "Troubleshooting login issues", usage_count: 38 },
+          { article: "Account verification guide", usage_count: 32 },
+          { article: "Payment processing help", usage_count: 28 },
+          { article: "Feature request process", usage_count: 25 },
+          { article: "API integration guide", usage_count: 22 },
+          { article: "Data export instructions", usage_count: 18 },
+          { article: "Security best practices", usage_count: 15 },
+          { article: "Billing FAQ", usage_count: 12 },
+          { article: "General troubleshooting", usage_count: 10 },
+        ],
+        language_distribution: [
+          { language: "English", count: 65, percentage: 65.0 },
+          { language: "Spanish", count: 12, percentage: 12.0 },
+          { language: "French", count: 10, percentage: 10.0 },
+          { language: "German", count: 8, percentage: 8.0 },
+          { language: "Chinese", count: 5, percentage: 5.0 },
+        ],
+        total_tickets: 85
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const stats = [
-    { label: 'Total Tickets', value: '342', icon: MessageSquare, color: 'text-blue-600' },
-    { label: 'Resolved', value: '318', icon: TrendingUp, color: 'text-green-600' },
-    { label: 'Avg Response Time', value: '1.8h', icon: Clock, color: 'text-yellow-600' },
-    { label: 'Customer Satisfaction', value: '94%', icon: Users, color: 'text-purple-600' },
-  ];
+  // Prepare data for charts
+  const priorityData = analyticsData ? [
+    { name: 'High', count: analyticsData.ticket_count_by_priority.High || 0, color: '#ef4444' },
+    { name: 'Medium', count: analyticsData.ticket_count_by_priority.Medium || 0, color: '#f59e0b' },
+    { name: 'Low', count: analyticsData.ticket_count_by_priority.Low || 0, color: '#10b981' },
+  ] : [];
+
+  const articlesData = analyticsData?.top_articles_usage || [];
+  
+  const languageData = analyticsData?.language_distribution || [];
+  const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#6366f1'];
+
+  const stats = analyticsData ? [
+    { label: 'Total Tickets', value: analyticsData.total_tickets || 0, icon: MessageSquare, color: 'text-blue-600' },
+    { label: 'High Priority', value: analyticsData.ticket_count_by_priority?.High || 0, icon: TrendingUp, color: 'text-red-600' },
+    { label: 'Medium Priority', value: analyticsData.ticket_count_by_priority?.Medium || 0, icon: Clock, color: 'text-yellow-600' },
+    { label: 'Low Priority', value: analyticsData.ticket_count_by_priority?.Low || 0, icon: Users, color: 'text-green-600' },
+  ] : [];
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 animate-spin text-primary-600" />
+        <span className="ml-3 text-gray-600">Loading analytics...</span>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -58,80 +102,90 @@ const Dashboard = () => {
 
       {/* Charts Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Ticket Volume Chart */}
+        {/* Ticket Count by Priority */}
         <div className="card">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Ticket Volume</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Tickets by Priority</h3>
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={ticketData}>
+            <BarChart data={priorityData}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="name" />
               <YAxis />
               <Tooltip />
-              <Bar dataKey="tickets" fill="#3b82f6" name="Total Tickets" />
-              <Bar dataKey="resolved" fill="#10b981" name="Resolved" />
+              <Bar dataKey="count" fill="#3b82f6" radius={[8, 8, 0, 0]}>
+                {priorityData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.color} />
+                ))}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
 
-        {/* Category Distribution */}
+        {/* Language Distribution */}
         <div className="card">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Ticket Categories</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={categoryData}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                outerRadius={80}
-                fill="#8884d8"
-                dataKey="value"
-              >
-                {categoryData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
-                ))}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* Response Time Trend */}
-        <div className="card lg:col-span-2">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Average Response Time Trend</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={responseTimeData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip />
-              <Line 
-                type="monotone" 
-                dataKey="avgTime" 
-                stroke="#3b82f6" 
-                strokeWidth={2}
-                name="Hours"
-              />
-            </LineChart>
-          </ResponsiveContainer>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Language Distribution</h3>
+          {languageData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  data={languageData}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={({ language, percentage }) => `${language}: ${percentage}%`}
+                  outerRadius={80}
+                  fill="#8884d8"
+                  dataKey="count"
+                >
+                  {languageData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(value, name, props) => [
+                  `${props.payload.language}: ${value} (${props.payload.percentage}%)`,
+                  'Count'
+                ]} />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex items-center justify-center h-[300px] text-gray-500">
+              No language data available
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Recent Activity Placeholder */}
+      {/* Top 10 Articles Usage */}
       <div className="card">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Activity</h3>
-        <div className="space-y-3">
-          {[1, 2, 3, 4, 5].map((item) => (
-            <div key={item} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
-              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-              <span className="text-sm text-gray-600">
-                Ticket #{1000 + item} resolved - Technical Issue
-              </span>
-              <span className="text-xs text-gray-400 ml-auto">2 hours ago</span>
-            </div>
-          ))}
-        </div>
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Top 10 Recommended Articles Usage</h3>
+        {articlesData.length > 0 ? (
+          <ResponsiveContainer width="100%" height={400}>
+            <BarChart 
+              data={articlesData} 
+              layout="vertical"
+              margin={{ top: 5, right: 30, left: 200, bottom: 5 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis type="number" />
+              <YAxis 
+                dataKey="article" 
+                type="category" 
+                width={180}
+                tick={{ fontSize: 12 }}
+              />
+              <Tooltip />
+              <Bar dataKey="usage_count" fill="#3b82f6" radius={[0, 8, 8, 0]}>
+                {articlesData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="flex items-center justify-center h-[400px] text-gray-500">
+            No article usage data available
+          </div>
+        )}
       </div>
     </div>
   );

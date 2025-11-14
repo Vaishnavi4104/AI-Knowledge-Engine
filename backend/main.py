@@ -15,7 +15,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.core.config import get_settings
+from app.db.database import create_tables
+from app.routes.auth_routes import router as auth_router
 from app.routes.ticket_routes import router as ticket_router
+from app.routes.analytics_routes import router as analytics_router
 from app.services.embedding_service import embedding_service
 from app.services.language_service import language_service
 from app.services.recommendation_service import recommendation_service
@@ -73,6 +76,11 @@ async def lifespan(app: FastAPI):  # noqa: D401
     """Application lifespan manager (startup/shutdown hooks)."""
 
     logger.info("Starting AI Knowledge Engine Backend...")
+    
+    # Create database tables if they don't exist
+    logger.info("Creating database tables...")
+    create_tables()
+    
     logger.info("Server starting... Models will load in background.")
 
     # Start model loading in background thread
@@ -105,7 +113,9 @@ app.add_middleware(
 )
 
 # Include routers
+app.include_router(auth_router, prefix="/api/auth", tags=["authentication"])
 app.include_router(ticket_router, prefix="/api", tags=["tickets"])
+app.include_router(analytics_router, prefix="/api", tags=["analytics"])
 
 
 @app.get("/")

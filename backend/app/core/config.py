@@ -2,7 +2,8 @@
 from functools import lru_cache
 from typing import List, Optional
 
-from pydantic import BaseSettings, Field, validator
+from pydantic import Field, validator
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
@@ -50,7 +51,16 @@ class Settings(BaseSettings):
         "text-embedding-3-large", env="OPENAI_EMBEDDING_MODEL"
     )
 
+    # Security / Authentication
+    secret_key: str = Field(
+        default="your-secret-key-change-in-production", 
+        env="SECRET_KEY"
+    )
+    algorithm: str = Field("HS256", env="ALGORITHM")
+    access_token_expire_minutes: int = Field(30 * 24 * 60, env="ACCESS_TOKEN_EXPIRE_MINUTES")  # 30 days
+
     # Integrations
+    huggingface_token: Optional[str] = Field(default=None, env="HUGGINGFACE_TOKEN")
     google_service_account_file: Optional[str] = Field(
         default=None, env="GOOGLE_SERVICE_ACCOUNT_FILE"
     )

@@ -27,6 +27,7 @@ class TicketAnalysis(Base):
     category = Column(String(100), nullable=True)
     sentiment = Column(String(20), nullable=True)  # positive, negative, neutral
     confidence = Column(Float, nullable=False)
+    language_code = Column(String(10), nullable=True)  # ISO 639-1 language code (e.g., 'en', 'es', 'fr')
     
     # Embedding information
     embedding_model = Column(String(100), default="all-MiniLM-L6-v2")
@@ -132,3 +133,28 @@ class AnalysisLog(Base):
     
     # Timestamp
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class User(Base):
+    """
+    Model for storing user accounts
+    """
+    __tablename__ = "users"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    
+    # User credentials
+    email = Column(String(255), unique=True, nullable=False, index=True)
+    hashed_password = Column(String(255), nullable=False)
+    
+    # User information
+    name = Column(String(255), nullable=False)
+    
+    # Account status
+    is_active = Column(Boolean, default=True)
+    is_verified = Column(Boolean, default=False)
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    last_login = Column(DateTime(timezone=True), nullable=True)

@@ -1,5 +1,5 @@
 """
-Language detection service using FastText
+Language detection service using FastText and langdetect for higher accuracy
 """
 
 import logging
@@ -17,7 +17,21 @@ except ImportError:  # pragma: no cover - optional dependency
     FASTTEXT_AVAILABLE = False
     fasttext = None
     logging.warning(
-        "FastText not available. Language detection will use fallback method."
+        "FastText not available. Language detection will use langdetect or fallback method."
+    )
+
+# Try to import langdetect, but make it optional
+try:
+    from langdetect import detect, detect_langs, LangDetectException
+
+    LANGDETECT_AVAILABLE = True
+except ImportError:  # pragma: no cover - optional dependency
+    LANGDETECT_AVAILABLE = False
+    detect = None
+    detect_langs = None
+    LangDetectException = None
+    logging.warning(
+        "langdetect not available. Language detection will use FastText or fallback method."
     )
 
 logger = logging.getLogger(__name__)
@@ -88,30 +102,40 @@ class LanguageService:
             logger.info("Using fallback language detection")
             self.model = None
 
-    def detect_language(self, text: str) -> Dict:
+    def detect_language(self, text: str, prefer_langdetect: bool = False) -> Dict:
         """
-        Detect the language of given text.
+        Detect the language of given text using FastText, langdetect, or fallback.
         
         Args:
             text (str): Input text to detect language for
+            prefer_langdetect (bool): If True, prefer langdetect over FastText
             
         Returns:
-            Dict: Language detection results with ISO code and confidence
+            Dict: Language detection results with ISO code, confidence, and method
         """
         if not text or not text.strip():
             return {
-                'language': 'en',
+                'language': 'English',
                 'language_code': 'en',
                 'confidence': 0.0,
                 'method': 'fallback'
             }
+        
+        # Try langdetect first if preferred and available
+        if prefer_langdetect and LANGDETECT_AVAILABLE:
+            try:
+                result = self._detect_with_langdetect(text)
+                if result:
+                    return result
+            except Exception as e:
+                logger.warning(f"langdetect detection failed: {str(e)}")
         
         # Use FastText if available
         if self.model:
             try:
                 # FastText requires at least one word
                 if len(text.strip().split()) == 0:
-                    return self._fallback_detection(text)
+                    return self._try_fallbacks(text)
                 
                 # Predict language
                 predictions = self.model.predict(text, k=1)
@@ -133,10 +157,85 @@ class LanguageService:
                 
             except Exception as e:
                 logger.warning(f"FastText detection failed: {str(e)}")
-                return self._fallback_detection(text)
+                return self._try_fallbacks(text)
         else:
+            # Try langdetect if FastText not available
+            if LANGDETECT_AVAILABLE:
+                try:
+                    result = self._detect_with_langdetect(text)
+                    if result:
+                        return result
+                except Exception as e:
+                    logger.warning(f"langdetect detection failed: {str(e)}")
+            
             # Fallback to keyword-based detection
             return self._fallback_detection(text)
+    
+    def _detect_with_langdetect(self, text: str) -> Optional[Dict]:
+        """
+        Detect language using langdetect library.
+        
+        Args:
+            text (str): Input text
+            
+        Returns:
+            Optional[Dict]: Language detection results or None if failed
+        """
+        if not LANGDETECT_AVAILABLE or not detect or not detect_langs:
+            return None
+        
+        try:
+            # langdetect requires at least a few words
+            words = text.strip().split()
+            if len(words) < 2:
+                return None
+            
+            # Detect language
+            language_code = detect(text)
+            
+            # Get confidence scores
+            try:
+                lang_probs = detect_langs(text)
+                confidence = float(lang_probs[0].prob) if lang_probs else 0.8
+            except Exception:
+                confidence = 0.8  # Default confidence if can't get probabilities
+            
+            # Normalize language code
+            language_code = self._normalize_language_code(language_code)
+            language_name = self._get_language_name(language_code)
+            
+            return {
+                'language': language_name,
+                'language_code': language_code,
+                'confidence': round(confidence, 4),
+                'method': 'langdetect'
+            }
+            
+        except LangDetectException as e:
+            logger.warning(f"langdetect exception: {str(e)}")
+            return None
+        except Exception as e:
+            logger.warning(f"Error in langdetect: {str(e)}")
+            return None
+    
+    def _try_fallbacks(self, text: str) -> Dict:
+        """
+        Try fallback detection methods (langdetect, then keyword-based).
+        
+        Args:
+            text (str): Input text
+            
+        Returns:
+            Dict: Language detection results
+        """
+        # Try langdetect if available
+        if LANGDETECT_AVAILABLE:
+            result = self._detect_with_langdetect(text)
+            if result:
+                return result
+        
+        # Fallback to keyword-based detection
+        return self._fallback_detection(text)
     
     def _normalize_language_code(self, code: str) -> str:
         """
@@ -262,10 +361,21 @@ class LanguageService:
         Returns:
             Dict: Model information
         """
+        methods = []
+        if self.is_model_loaded():
+            methods.append('fasttext')
+        if LANGDETECT_AVAILABLE:
+            methods.append('langdetect')
+        if not methods:
+            methods.append('fallback')
+        
         return {
             'model_loaded': self.is_model_loaded(),
             'model_name': self.model_name,
-            'method': 'fasttext' if self.is_model_loaded() else 'fallback'
+            'fasttext_available': FASTTEXT_AVAILABLE,
+            'langdetect_available': LANGDETECT_AVAILABLE,
+            'methods': methods,
+            'primary_method': 'fasttext' if self.is_model_loaded() else ('langdetect' if LANGDETECT_AVAILABLE else 'fallback')
         }
 
 

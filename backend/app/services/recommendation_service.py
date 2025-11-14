@@ -76,7 +76,13 @@ class RecommendationService:
             logger.info(
                 "Loading dataset from Hugging Face: Tobi-Bueck/customer-support-tickets"
             )
-            dataset = load_dataset("Tobi-Bueck/customer-support-tickets", split="train")
+            # Use token if available (for gated datasets)
+            token = settings.huggingface_token if settings.huggingface_token else None
+            dataset = load_dataset(
+                "Tobi-Bueck/customer-support-tickets", 
+                split="train",
+                token=token
+            )
 
             answers: List[Dict] = []
 

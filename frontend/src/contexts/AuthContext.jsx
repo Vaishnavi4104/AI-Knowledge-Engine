@@ -28,37 +28,47 @@ export const AuthProvider = ({ children }) => {
         
         // Set token in axios headers
         api.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
+        
+        // Verify token is still valid by fetching user info
+        api.get('/api/auth/me')
+          .then(response => {
+            // Token is valid, update user data
+            const userData = response.data;
+            setUser(userData);
+            localStorage.setItem('user', JSON.stringify(userData));
+          })
+          .catch(error => {
+            // Token is invalid, clear auth data
+            console.error('Token verification failed:', error);
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            setToken(null);
+            setUser(null);
+            delete api.defaults.headers.common['Authorization'];
+          })
+          .finally(() => {
+            setIsLoading(false);
+          });
       } catch (error) {
         console.error('Error parsing stored user data:', error);
         // Clear invalid data
         localStorage.removeItem('token');
         localStorage.removeItem('user');
+        setIsLoading(false);
       }
+    } else {
+      setIsLoading(false);
     }
-    
-    setIsLoading(false);
   }, []);
 
   const login = async (email, password) => {
     try {
-      const response = await api.post('/api/login', {
+      const response = await api.post('/api/auth/login', {
         email,
         password
       });
 
-      // For development, create mock response
-      const mockResponse = {
-        data: {
-          token: 'mock-jwt-token-' + Date.now(),
-          user: {
-            id: 1,
-            email: email,
-            name: email.split('@')[0]
-          }
-        }
-      };
-
-      const { token: newToken, user: userData } = mockResponse.data;
+      const { token: newToken, user: userData } = response.data;
 
       // Store in localStorage
       localStorage.setItem('token', newToken);
@@ -74,31 +84,21 @@ export const AuthProvider = ({ children }) => {
       return { success: true, user: userData };
     } catch (error) {
       console.error('Login error:', error);
-      throw error;
+      // Extract error message from response
+      const errorMessage = error.response?.data?.detail || error.message || 'Login failed';
+      throw new Error(errorMessage);
     }
   };
 
   const register = async (name, email, password) => {
     try {
-      const response = await api.post('/api/register', {
+      const response = await api.post('/api/auth/signup', {
         name,
         email,
         password
       });
 
-      // For development, create mock response
-      const mockResponse = {
-        data: {
-          token: 'mock-jwt-token-' + Date.now(),
-          user: {
-            id: Math.floor(Math.random() * 1000),
-            name: name,
-            email: email
-          }
-        }
-      };
-
-      const { token: newToken, user: userData } = mockResponse.data;
+      const { token: newToken, user: userData } = response.data;
 
       // Store in localStorage
       localStorage.setItem('token', newToken);
@@ -114,7 +114,9 @@ export const AuthProvider = ({ children }) => {
       return { success: true, user: userData };
     } catch (error) {
       console.error('Registration error:', error);
-      throw error;
+      // Extract error message from response
+      const errorMessage = error.response?.data?.detail || error.message || 'Registration failed';
+      throw new Error(errorMessage);
     }
   };
 

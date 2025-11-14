@@ -1,4 +1,4 @@
-import { CheckCircle, Tag, TrendingUp, AlertTriangle, Clock } from 'lucide-react';
+import { CheckCircle, Tag, TrendingUp, AlertTriangle, Clock, Globe } from 'lucide-react';
 
 const RecommendationPanel = ({ result }) => {
   const getSentimentColor = (sentiment) => {
@@ -69,6 +69,35 @@ const RecommendationPanel = ({ result }) => {
               {result.priority?.charAt(0).toUpperCase() + result.priority?.slice(1).toLowerCase() || 'Low'}
             </span>
           </div>
+
+          {/* Language Detection */}
+          {result.language && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Detected Language
+              </label>
+              <div className="flex items-center space-x-2">
+                <Globe className="w-4 h-4 text-primary-600" />
+                <div>
+                  <span className="text-lg font-semibold text-gray-900">
+                    {result.language.language || result.language}
+                  </span>
+                  {result.language.confidence && (
+                    <div className="mt-1 flex items-center space-x-2">
+                      <span className="text-xs text-gray-500">
+                        Confidence: {Math.round(result.language.confidence * 100)}%
+                      </span>
+                      {result.language.method && (
+                        <span className="text-xs text-gray-400">
+                          ({result.language.method})
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Suggested Article & Keywords */}
